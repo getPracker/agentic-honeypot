@@ -85,6 +85,15 @@ def create_app() -> FastAPI:
             }
         )
     
+    # Initialize orchestrator
+    from .services.orchestrator import MessageProcessor
+    
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize resources on startup."""
+        app.state.processor = MessageProcessor()
+        logger.info("Message Processor Initialized")
+
     # Add health check endpoint
     @app.get("/health")
     async def health_check():
@@ -114,22 +123,15 @@ def create_app() -> FastAPI:
                 detail="Message text cannot be empty"
             )
         
-        # TODO: This is a placeholder implementation
-        # The actual processing logic will be implemented in later tasks
-        return MessageResponse(
-            status="success",
-            scam_detected=False,
-            agent_response=None,
-            engagement_metrics=EngagementMetrics(
-                conversation_duration=0,
-                message_count=1,
-                engagement_quality=0.0,
-                intelligence_score=0.0
-            ),
-            extracted_intelligence={},
-            agent_notes="Message processed successfully",
-            session_id=request.session_id
-        )
+        try:
+            response = await app.state.processor.process_message(request)
+            return response
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process message"
+            )
     
     logger.info("Application created successfully")
     return app
