@@ -3,7 +3,7 @@
 import logging
 import threading
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -57,7 +57,7 @@ class SessionManager:
                 logger.warning(f"Session ID {session_id} already exists")
                 raise ValueError(f"Session with ID {session_id} already exists")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             session = Session(
                 session_id=session_id,
                 created_at=now,
@@ -109,7 +109,7 @@ class SessionManager:
             if session.session_id not in self._sessions:
                 raise ValueError(f"Session {session.session_id} not found")
             
-            session.updated_at = datetime.utcnow()
+            session.updated_at = datetime.now(timezone.utc)
             self._sessions[session.session_id] = session
 
     def delete_session(self, session_id: str) -> bool:
@@ -165,14 +165,14 @@ class SessionManager:
             # For in-memory limit, we probably want to clear them eventually. 
             # But let's assume 'expired' refers to timeout of active sessions.
         
-        age = datetime.utcnow() - session.updated_at
+        age = datetime.now(timezone.utc) - session.updated_at
         return age.total_seconds() > self._session_timeout
 
     def _terminate_session(self, session_id: str, status: SessionStatus) -> None:
         """Internal helper to mark session as terminated/completed."""
         if session_id in self._sessions:
             self._sessions[session_id].status = status
-            self._sessions[session_id].updated_at = datetime.utcnow()
+            self._sessions[session_id].updated_at = datetime.now(timezone.utc)
 
     def add_message_to_session(self, session_id: str, message: Message) -> Session:
         """

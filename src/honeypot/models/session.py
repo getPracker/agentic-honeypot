@@ -1,7 +1,7 @@
 """Session and conversation management models."""
 
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
@@ -66,12 +66,12 @@ class Session:
     def add_message(self, message: Message) -> None:
         """Add a message to the session."""
         self.messages.append(message)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def add_analysis(self, analysis: ScamAnalysis) -> None:
         """Add a scam analysis to the session."""
         self.scam_analyses.append(analysis)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def get_message_count(self) -> int:
         """Get the total number of messages in the session."""

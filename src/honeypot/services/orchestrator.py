@@ -2,7 +2,7 @@
 
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..models.core import Message, MessageRequest, MessageResponse, EngagementMetrics
 from ..models.session import Session, SessionStatus
@@ -107,8 +107,8 @@ class MessageProcessor:
                 agent_msg = Message(
                     sender="agent",
                     text=agent_response_text,
-                    timestamp=datetime.utcnow(),
-                    message_id=f"agent_{int(datetime.utcnow().timestamp())}"
+                    timestamp=datetime.now(timezone.utc),
+                    message_id=f"agent_{int(datetime.now(timezone.utc).timestamp())}"
                 )
                 self.session_manager.add_message_to_session(session_id, agent_msg)
         
