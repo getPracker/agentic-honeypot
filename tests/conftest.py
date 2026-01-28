@@ -1,5 +1,13 @@
 """Pytest configuration and shared fixtures."""
 
+import os
+import sys
+
+# Set up environment variables before any imports
+os.environ.setdefault('DATABASE_URL', "sqlite:///test.db")
+os.environ.setdefault('ENCRYPTION_KEY', "DGRP2s9PsfDib7V9rKaa4Dld-DfTaqPiCkIJ3Y1EOWQ=")
+os.environ.setdefault('API_KEYS', '["test-key"]')
+
 import pytest
 from datetime import datetime
 from typing import List
@@ -9,6 +17,15 @@ from honeypot.models import (
     Message, MessageRequest, RequestMetadata, ScamAnalysis, ScamType,
     Session, SessionStatus, PersonaState, EngagementStrategy, ConversationStage
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def clear_settings_cache():
+    """Clear settings cache before test session to ensure fresh config."""
+    from honeypot.config.settings import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture

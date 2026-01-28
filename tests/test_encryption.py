@@ -4,11 +4,6 @@ import sys
 import os
 import pytest
 
-# Set required env vars
-os.environ['DATABASE_URL'] = "sqlite:///test.db"
-os.environ['ENCRYPTION_KEY'] = "DGRP2s9PsfDib7V9rKaa4Dld-DfTaqPiCkIJ3Y1EOWQ="
-os.environ['API_KEYS'] = '["test"]'
-
 # Ensure src is in path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
