@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     api_keys: List[str] = Field(default_factory=list)
     
     # Database Configuration
-    database_url: str = Field(...)
+    database_url: str = Field(default="sqlite:///./honeypot.db")
     redis_url: str = Field(default="redis://localhost:6379/0")
     
     # LLM Configuration
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     default_llm_provider: str = Field(default="openai")
     
     # Encryption Configuration
-    encryption_key: str = Field(...)
+    encryption_key: str = Field(default="DGRP2s9PsfDib7V9rKaa4Dld-DfTaqPiCkIJ3Y1EOWQ=")
     
     # Callback Configuration
     guvi_callback_url: str = Field(
