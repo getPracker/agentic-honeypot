@@ -33,10 +33,10 @@ class ScamDetector:
                 (r"\b(enter.*pin)\b", 0.5),
             ],
             ScamType.PHISHING: [
-                (r"\b(click|visit|link)\b", 0.2),
-                (r"http[s]?://", 0.3),
-                (r"\b(login|sign in|update)\b", 0.2),
-                (r"\b(urgent|immediate.*|24 hours)\b", 0.2),
+                (r"\b(click here|visit link|open this)\b", 0.3),
+                (r"http[s]?://[^\s]{15,}", 0.3), # Malicious links are often long/obfuscated
+                (r"\b(login|sign in|update.*payment|verify.*identity|account.*suspended)\b", 0.4),
+                (r"\b(urgent|immediate.*|24 hours|expire.*now)\b", 0.2),
             ],
             ScamType.FAKE_OFFER: [
                 (r"\b(winner|won|lottery|prize)\b", 0.5),
@@ -48,6 +48,16 @@ class ScamDetector:
                 (r"\b(invest|crypto|bitcoin|profit|return)\b", 0.4),
                 (r"\b(guaranteed|double|earning)\b", 0.4),
                 (r"\b(opportunity|scheme)\b", 0.2),
+            ],
+            ScamType.TECH_SUPPORT: [
+                (r"\b(microsoft|apple|support|technician|virus|infected|malware|pc|computer)\b", 0.3),
+                (r"\b(error.*code|scanning|alert|warning)\b", 0.3),
+                (r"\b(toll.*free|call.*now|\+?1-?8[0-9]{2})\b", 0.4),
+            ],
+            ScamType.ROMANCE_SCAM: [
+                (r"\b(love|honey|babe|darling|dear)\b", 0.2),
+                (r"\b(lonely|widow|soldier|abroad|stuck)\b", 0.3),
+                (r"\b(need.*help|money.*flight|hospital.*bill)\b", 0.4),
             ]
         }
         
@@ -101,7 +111,7 @@ class ScamDetector:
                 
         # 3. Determine Final Verdict
         # Threshold for considering it a scam
-        is_scam = max_score >= 0.4 
+        is_scam = max_score >= 0.5 
         
         # If score is low but we have generic risk signs, maybe boost slightly?
         if not is_scam and detected_risks:

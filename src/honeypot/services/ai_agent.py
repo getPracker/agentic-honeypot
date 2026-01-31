@@ -58,7 +58,7 @@ class AIAgent:
             
         if self._settings.gemini_api_key:
             genai.configure(api_key=self._settings.gemini_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-pro')
+            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
         
         if not self.openai_client and not self.gemini_model:
             logger.warning("No LLM API keys configured. agent will run in detailed mock mode.")
@@ -114,10 +114,12 @@ class AIAgent:
         
         # Use Gemini if preferred or OpenAI not avail
         if self._settings.default_llm_provider == "gemini" and self.gemini_model:
-            return self._generate_gemini_response(prompt, session, current_message)
+            resp = self._generate_gemini_response(prompt, session, current_message)
+            if resp: return resp
             
         if self.openai_client:
-            return self._generate_openai_response(prompt, session, current_message)
+            resp = self._generate_openai_response(prompt, session, current_message)
+            if resp: return resp
 
         return self._generate_mock_response(current_message)
 
