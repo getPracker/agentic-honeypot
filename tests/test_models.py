@@ -62,7 +62,8 @@ class TestMessageRequest:
     def test_request_creation(self, sample_message_request):
         """Test basic request creation."""
         assert sample_message_request.session_id == "session_001"
-        assert sample_message_request.message == "Hello, I received your message about winning a lottery"
+        assert isinstance(sample_message_request.message, Message)
+        assert sample_message_request.message.text == "Hello, I received your message about winning a lottery"
         assert isinstance(sample_message_request.conversation_history, list)
         assert isinstance(sample_message_request.metadata, RequestMetadata)
     
@@ -71,8 +72,8 @@ class TestMessageRequest:
         """Property test: MessageRequest should have valid structure."""
         assert isinstance(request.session_id, str)
         assert len(request.session_id) > 0
-        assert isinstance(request.message, str)
-        assert len(request.message) > 0
+        assert isinstance(request.message, Message)
+        assert len(request.message.text) > 0
         assert isinstance(request.conversation_history, list)
         assert isinstance(request.metadata, RequestMetadata)
 

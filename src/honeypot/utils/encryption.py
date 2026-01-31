@@ -1,12 +1,13 @@
 """Encryption utilities for secure data storage."""
 
 import base64
+import logging
 from typing import Union
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.fernet import Fernet, InvalidToken
 
 from ..config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class EncryptionManager:
@@ -15,7 +16,17 @@ class EncryptionManager:
     def __init__(self):
         """Initialize encryption manager with configured key."""
         settings = get_settings()
-        self._fernet = Fernet(settings.encryption_key.encode())
+        # The key from settings is already a base64-encoded string
+        # Fernet expects bytes
+        key = settings.encryption_key
+        if isinstance(key, str):
+            key = key.encode('utf-8')
+        
+        try:
+            self._fernet = Fernet(key)
+        except Exception as e:
+            logger.error(f"Failed to initialize Fernet with provided key: {e}")
+            raise ValueError("Invalid encryption key format. Must be a valid Fernet key.")
     
     def encrypt(self, data: Union[str, bytes]) -> str:
         """
@@ -30,8 +41,12 @@ class EncryptionManager:
         if isinstance(data, str):
             data = data.encode('utf-8')
         
-        encrypted = self._fernet.encrypt(data)
-        return base64.b64encode(encrypted).decode('utf-8')
+        try:
+            encrypted = self._fernet.encrypt(data)
+            return base64.b64encode(encrypted).decode('utf-8')
+        except Exception as e:
+            logger.error(f"Encryption failed: {e}")
+            raise
     
     def decrypt(self, encrypted_data: str) -> str:
         """
@@ -42,10 +57,20 @@ class EncryptionManager:
             
         Returns:
             Decrypted string
+            
+        Raises:
+            InvalidToken: If decryption fails (wrong key or corrupted data)
         """
-        encrypted_bytes = base64.b64decode(encrypted_data.encode('utf-8'))
-        decrypted = self._fernet.decrypt(encrypted_bytes)
-        return decrypted.decode('utf-8')
+        try:
+            encrypted_bytes = base64.b64decode(encrypted_data.encode('utf-8'))
+            decrypted = self._fernet.decrypt(encrypted_bytes)
+            return decrypted.decode('utf-8')
+        except InvalidToken:
+            logger.error("Decryption failed: Invalid token or wrong key")
+            raise
+        except Exception as e:
+            logger.error(f"Decryption failed: {e}")
+            raise
     
     @staticmethod
     def generate_key() -> str:

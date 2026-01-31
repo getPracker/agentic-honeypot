@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  honeypot:
+    build: .
+    container_name: agentic-honeypot
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///honeypot.db}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - API_KEYS=${API_KEYS}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GUVI_CALLBACK_URL=${GUVI_CALLBACK_URL}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-gemini}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - honeypot-network
+
+networks:
+  honeypot-network:
+    driver: bridge

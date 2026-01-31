@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     openai_api_key: Optional[str] = Field(None)
+    gemini_api_key: Optional[str] = Field(None)
     anthropic_api_key: Optional[str] = Field(None)
     default_llm_provider: str = Field(default="openai")
     

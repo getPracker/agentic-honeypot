@@ -4,12 +4,42 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import ValidationError
+import re
 
 from .config import get_settings
 from .utils import setup_logging, get_logger
 from .models.core import MessageRequest, MessageResponse, EngagementMetrics
 from .middleware import AuthenticationMiddleware
+
+
+def sanitize_input(text: str) -> str:
+    """
+    Sanitize user input to prevent injection attacks.
+    
+    Args:
+        text: Input text to sanitize
+        
+    Returns:
+        Sanitized text
+    """
+    if not text:
+        return text
+    
+    # Remove null bytes
+    text = text.replace('\x00', '')
+    
+    # Remove control characters except newline and tab
+    text = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', text)
+    
+    # Limit length to prevent DoS
+    max_length = 10000
+    if len(text) > max_length:
+        text = text[:max_length]
+    
+    return text
 
 
 def create_app() -> FastAPI:
@@ -26,6 +56,43 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc"
     )
+    
+    # Get settings
+    settings = get_settings()
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins if hasattr(settings, 'allowed_origins') else ["*"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
+    )
+    
+    # Add trusted host middleware for production
+    if hasattr(settings, 'trusted_hosts'):
+        app.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=settings.trusted_hosts
+        )
+    
+    # Add security headers middleware
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        """Add security headers to all responses."""
+        response = await call_next(request)
+        
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        return response
     
     # Add authentication middleware
     app.add_middleware(AuthenticationMiddleware)
@@ -85,6 +152,15 @@ def create_app() -> FastAPI:
             }
         )
     
+    # Initialize orchestrator
+    from .services.orchestrator import MessageProcessor
+    
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize resources on startup."""
+        app.state.processor = MessageProcessor()
+        logger.info("Message Processor Initialized")
+
     # Add health check endpoint
     @app.get("/health")
     async def health_check():
@@ -101,6 +177,10 @@ def create_app() -> FastAPI:
         """
         logger.info(f"Processing message for session: {request.session_id}")
         
+        # Sanitize inputs
+        request.session_id = sanitize_input(request.session_id)
+        request.message.text = sanitize_input(request.message.text)
+        
         # Validate request data
         if not request.session_id.strip():
             raise HTTPException(
@@ -114,22 +194,22 @@ def create_app() -> FastAPI:
                 detail="Message text cannot be empty"
             )
         
-        # TODO: This is a placeholder implementation
-        # The actual processing logic will be implemented in later tasks
-        return MessageResponse(
-            status="success",
-            scam_detected=False,
-            agent_response=None,
-            engagement_metrics=EngagementMetrics(
-                conversation_duration=0,
-                message_count=1,
-                engagement_quality=0.0,
-                intelligence_score=0.0
-            ),
-            extracted_intelligence={},
-            agent_notes="Message processed successfully",
-            session_id=request.session_id
-        )
+        # Additional validation: session ID format
+        if not re.match(r'^[a-zA-Z0-9_-]{1,100}$', request.session_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session ID format"
+            )
+        
+        try:
+            response = await app.state.processor.process_message(request)
+            return response
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process message"
+            )
     
     logger.info("Application created successfully")
     return app
