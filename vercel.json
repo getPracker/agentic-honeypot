@@ -14,8 +14,12 @@
             "dest": "api/index.py"
         },
         {
-            "src": "/api/(.*)",
-            "dest": "api/index.py"
+            "src": "/api/v1/process-message",
+            "dest": "api/process.py"
+        },
+        {
+            "src": "/process",
+            "dest": "api/process.py"
         },
         {
             "src": "/(.*)",
