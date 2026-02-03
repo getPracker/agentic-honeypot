@@ -1,18 +1,15 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "api/index.py",
-            "use": "@vercel/python",
-            "config": {
-                "maxLambdaSize": "50mb"
-            }
+    "functions": {
+        "api/index.py": {
+            "maxDuration": 30,
+            "memory": 1024
         },
-        {
-            "src": "api/ping.py",
-            "use": "@vercel/python"
+        "api/ping.py": {
+            "maxDuration": 10,
+            "memory": 512
         }
-    ],
+    },
     "routes": [
         {
             "src": "/ping",
@@ -30,10 +27,5 @@
             "src": "/(.*)",
             "dest": "api/index.py"
         }
-    ],
-    "functions": {
-        "api/index.py": {
-            "maxDuration": 30
-        }
-    }
+    ]
 }
