@@ -1,7 +1,11 @@
+import sys
+import os
 from http.server import BaseHTTPRequestHandler
 import json
 import time
-import os
+
+# Add the src directory to the system path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -15,18 +19,26 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "status": "healthy", 
                 "service": "agentic-honeypot",
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "mode": "stateless"
             }
         else:
             response = {
-                "message": "Agentic Honeypot API",
+                "message": "Agentic Honeypot API - Stateless Mode",
                 "status": "running",
                 "path": self.path,
                 "timestamp": time.time(),
                 "endpoints": {
                     "health": "/health",
                     "process": "/api/v1/process-message (POST)"
-                }
+                },
+                "features": [
+                    "AI Agent with Personas",
+                    "Scam Detection", 
+                    "Intelligence Extraction",
+                    "Stateless Session Management",
+                    "Full Service Integration"
+                ]
             }
         
         self.wfile.write(json.dumps(response).encode('utf-8'))
@@ -37,20 +49,6 @@ class handler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         
-        # Check API key (basic validation)
-        api_key = self.headers.get('x-api-key')
-        expected_api_keys = ["7nSdYaVoJPGXcveub_8YPhuv4hyE7G7ZeeWrfBw7Rbo"]  # Add your API key here
-        
-        # Skip API key check for now to match the working submission
-        # if not api_key or api_key not in expected_api_keys:
-        #     self.send_response(401)
-        #     self.send_header('Content-type', 'application/json')
-        #     self.send_header('Access-Control-Allow-Origin', '*')
-        #     self.end_headers()
-        #     error_response = {"status": "error", "message": "Invalid or missing API key"}
-        #     self.wfile.write(json.dumps(error_response).encode('utf-8'))
-        #     return
-        
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -60,22 +58,13 @@ class handler(BaseHTTPRequestHandler):
             # Parse JSON data
             data = json.loads(post_data.decode('utf-8')) if post_data else {}
             
-            # Extract message details
-            session_id = data.get("sessionId", "unknown")
-            message = data.get("message", {})
-            message_text = message.get("text", "")
-            sender = message.get("sender", "unknown")
-            conversation_history = data.get("conversationHistory", [])
-            metadata = data.get("metadata", {})
+            # Process using stateless services
+            result = self.process_with_stateless_services(data)
             
-            # Generate appropriate response based on the scam message
-            # This is a simple rule-based response for now
-            reply = self.generate_scam_response(message_text, sender, metadata)
-            
-            # Return the expected format
+            # Return in the expected simple format for external API
             response = {
                 "status": "success",
-                "reply": reply
+                "reply": result.get("reply", "I didn't understand that.")
             }
             
         except json.JSONDecodeError:
@@ -84,6 +73,7 @@ class handler(BaseHTTPRequestHandler):
                 "reply": "Invalid JSON data received"
             }
         except Exception as e:
+            print(f"Processing error: {e}")
             response = {
                 "status": "error", 
                 "reply": f"Processing error: {str(e)}"
@@ -92,64 +82,116 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(response).encode('utf-8'))
         return
     
-    def generate_scam_response(self, message_text, sender, metadata):
-        """Generate an appropriate response to the scam message."""
+    def process_with_stateless_services(self, data):
+        """Process using the stateless honeypot services."""
+        try:
+            # Import the stateless services
+            from honeypot.services.stateless_orchestrator import StatelessMessageProcessor
+            from honeypot.models.core import MessageRequest, Message
+            from datetime import datetime, timezone
+            
+            # Create the stateless processor
+            processor = StatelessMessageProcessor()
+            
+            # Convert the incoming data to our internal format
+            message_data = data.get("message", {})
+            message = Message(
+                sender=message_data.get("sender", "scammer"),
+                text=message_data.get("text", ""),
+                timestamp=self._parse_timestamp(message_data.get("timestamp")),
+                message_id=message_data.get("message_id", f"msg_{int(time.time())}")
+            )
+            
+            # Create the request
+            request = MessageRequest(
+                session_id=data.get("sessionId", f"session_{int(time.time())}"),
+                message=message,
+                conversation_history=data.get("conversationHistory", []),
+                metadata=data.get("metadata", {})
+            )
+            
+            # Process the message using the stateless orchestrator
+            import asyncio
+            
+            # Handle async processing
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            response = loop.run_until_complete(processor.process_message(request))
+            
+            # Return comprehensive result
+            return {
+                "reply": response.agent_response or "I'm sorry, I didn't understand that.",
+                "scam_detected": response.scam_detected,
+                "intelligence": response.extracted_intelligence,
+                "metrics": {
+                    "conversation_duration": response.engagement_metrics.conversation_duration,
+                    "message_count": response.engagement_metrics.message_count,
+                    "engagement_quality": response.engagement_metrics.engagement_quality,
+                    "intelligence_score": response.engagement_metrics.intelligence_score
+                },
+                "session_id": response.session_id,
+                "notes": response.agent_notes
+            }
+                
+        except ImportError as e:
+            print(f"Import error: {e}")
+            # Fallback to simple response
+            return self.generate_fallback_response(data)
+        except Exception as e:
+            print(f"Processing error: {e}")
+            # Fallback to simple response
+            return self.generate_fallback_response(data)
+    
+    def _parse_timestamp(self, timestamp_data):
+        """Parse timestamp from various formats."""
+        if isinstance(timestamp_data, (int, float)):
+            # Assume Unix timestamp in milliseconds
+            return datetime.fromtimestamp(timestamp_data / 1000, tz=timezone.utc)
+        elif isinstance(timestamp_data, str):
+            try:
+                # Try ISO format
+                return datetime.fromisoformat(timestamp_data.replace('Z', '+00:00'))
+            except ValueError:
+                pass
         
-        # Convert message to lowercase for pattern matching
-        text_lower = message_text.lower()
+        # Fallback to current time
+        return datetime.now(timezone.utc)
+    
+    def generate_fallback_response(self, data):
+        """Generate a simple fallback response when services are not available."""
+        message_data = data.get("message", {})
+        message_text = message_data.get("text", "").lower()
         
-        # Different response strategies based on scam type
-        if "bank" in text_lower or "account" in text_lower:
+        # Simple rule-based responses as fallback
+        if "bank" in message_text or "account" in message_text:
             responses = [
-                "Why is my account being suspended?",
-                "I don't understand, what verification do you need?",
-                "Can you please explain what's wrong with my account?",
-                "Is this really from my bank? This seems suspicious.",
-                "What documents do I need to provide?"
+                "Oh no! What happened to my account? What do I need to do?",
+                "I'm really worried about this. How can I verify my account?",
+                "Please help me fix this immediately. What information do you need?"
             ]
-        elif "lottery" in text_lower or "won" in text_lower or "prize" in text_lower:
+        elif "lottery" in message_text or "won" in message_text:
             responses = [
-                "Really? I won something? What do I need to do?",
-                "This sounds too good to be true. How did I win?",
-                "What lottery is this? I don't remember entering any.",
-                "Do I need to pay any fees to claim the prize?",
-                "Can you send me more details about this lottery?"
+                "Really? I can't believe I won! What do I need to do to claim it?",
+                "This is amazing! How much did I win? What's the next step?",
+                "I'm so excited! Please tell me how to collect my prize."
             ]
-        elif "tax" in text_lower or "refund" in text_lower or "irs" in text_lower:
+        elif "urgent" in message_text or "immediate" in message_text:
             responses = [
-                "I wasn't expecting a tax refund. Are you sure?",
-                "What information do you need from me?",
-                "How much is the refund amount?",
-                "Why do I need to verify my details for a refund?",
-                "Is this really from the tax department?"
-            ]
-        elif "urgent" in text_lower or "immediate" in text_lower or "expire" in text_lower:
-            responses = [
-                "Why is this so urgent? What happens if I don't act now?",
-                "Can I call you back to verify this?",
-                "This seems very rushed. Is there a deadline?",
-                "I need time to think about this. Can you wait?",
-                "Why didn't I receive any prior notice about this?"
-            ]
-        elif "click" in text_lower or "link" in text_lower or "verify" in text_lower:
-            responses = [
-                "I'm not comfortable clicking links. Can you help me another way?",
-                "Is there a phone number I can call instead?",
-                "Why do I need to click a link? This seems suspicious.",
-                "Can you verify your identity first?",
-                "I prefer to handle this through official channels."
+                "Oh my goodness, I don't want to miss this! What should I do right now?",
+                "I'm available now! Please tell me exactly what I need to do.",
+                "I'm ready to act immediately! What's the first step?"
             ]
         else:
-            # Generic responses for other types of scams
             responses = [
-                "I'm not sure I understand. Can you explain more?",
-                "This is unexpected. Are you sure you have the right person?",
-                "I need to verify this with someone first.",
-                "Can you provide more details about this?",
-                "I'm confused. Why are you contacting me about this?"
+                "I'm concerned about this. Can you please help me understand what to do?",
+                "This sounds important. What information do you need from me?",
+                "I want to resolve this quickly. Please tell me the next steps."
             ]
         
-        # Select response based on conversation context or randomly
         import random
-        return random.choice(responses)
+        return {"reply": random.choice(responses)}
 
