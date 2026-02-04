@@ -2,7 +2,7 @@
 
 import logging
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError

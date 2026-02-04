@@ -3,6 +3,7 @@ import os
 from http.server import BaseHTTPRequestHandler
 import json
 import time
+from typing import List
 
 # Add the src directory to the system path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
