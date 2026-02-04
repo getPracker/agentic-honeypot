@@ -141,6 +141,13 @@ class StatelessMessageProcessor:
         """
         Determine if the AI agent should engage based on session context.
         
+        Enhanced engagement strategy:
+        - Always engage if scam is detected (confidence ≥ 0.5)
+        - Engage if moderate suspicion (confidence ≥ 0.3) to gather more intel
+        - Engage if previous messages were suspicious (continuing conversation)
+        - Engage if message contains financial/personal info requests
+        - Only skip engagement for clearly innocent messages
+        
         Args:
             session: The reconstructed session
             current_analysis: Analysis of the current message
@@ -153,23 +160,59 @@ class StatelessMessageProcessor:
         print(f"   📊 Current analysis - confidence: {current_analysis.confidence}")
         print(f"   📊 Current analysis - type: {current_analysis.scam_type.value}")
         
-        # Engage if current message is detected as scam
+        # Always engage if current message is detected as scam
         if current_analysis.is_scam:
-            print(f"   ✅ Will engage: Current message is detected as scam")
+            print(f"   ✅ Will engage: Current message is detected as scam (confidence: {current_analysis.confidence})")
             return True
         
-        # Engage if any previous message in the session was a scam
-        # (continuing an ongoing scam conversation)
-        previous_scams = [analysis.is_scam for analysis in session.scam_analyses]
-        print(f"   📚 Previous scam analyses: {previous_scams}")
-        
-        if any(analysis.is_scam for analysis in session.scam_analyses):
-            print(f"   ✅ Will engage: Previous message(s) were scams (continuing conversation)")
+        # Engage if moderate suspicion - could be building up to a scam
+        if current_analysis.confidence >= 0.3:
+            print(f"   ✅ Will engage: Moderate suspicion detected (confidence: {current_analysis.confidence})")
             return True
         
-        # Don't engage for non-scam messages
-        print(f"   ❌ Will NOT engage: No scam detected in current or previous messages")
-        return False
+        # Engage if any previous message in the session was suspicious
+        previous_analyses = session.scam_analyses
+        print(f"   📚 Previous analyses count: {len(previous_analyses)}")
+        
+        if previous_analyses:
+            max_previous_confidence = max(analysis.confidence for analysis in previous_analyses)
+            any_previous_scam = any(analysis.is_scam for analysis in previous_analyses)
+            
+            print(f"   📊 Max previous confidence: {max_previous_confidence}")
+            print(f"   📊 Any previous scam: {any_previous_scam}")
+            
+            if any_previous_scam or max_previous_confidence >= 0.3:
+                print(f"   ✅ Will engage: Previous message(s) were suspicious (continuing conversation)")
+                return True
+        
+        # Check if message contains keywords that warrant engagement even if not flagged as scam
+        message_text = session.messages[-1].text.lower() if session.messages else ""
+        engagement_keywords = [
+            # Financial terms
+            'bank', 'account', 'money', 'payment', 'transfer', 'upi', 'paytm', 'gpay',
+            'card', 'pin', 'otp', 'cvv', 'password', 'verify', 'confirm',
+            # Personal info
+            'name', 'address', 'phone', 'number', 'details', 'information',
+            # Urgency/action words
+            'urgent', 'immediate', 'now', 'today', 'expire', 'block', 'suspend',
+            # Questions that need responses
+            'what', 'how', 'when', 'where', 'why', 'can you', 'do you', 'are you'
+        ]
+        
+        contains_engagement_keywords = any(keyword in message_text for keyword in engagement_keywords)
+        
+        if contains_engagement_keywords:
+            print(f"   ✅ Will engage: Message contains engagement keywords")
+            return True
+        
+        # If we have an ongoing conversation (multiple messages), keep it going
+        if len(session.messages) > 1:
+            print(f"   ✅ Will engage: Ongoing conversation ({len(session.messages)} messages)")
+            return True
+        
+        # For very first message with no suspicious indicators, still engage but with caution
+        print(f"   ✅ Will engage: First message - being naturally responsive")
+        return True
 
     def _merge_intelligence(self, session: Session, new_intel):
         """Merge new intelligence into session."""

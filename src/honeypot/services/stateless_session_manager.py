@@ -20,7 +20,7 @@ class StatelessSessionManager:
     def create_session_from_history(
         self, 
         session_id: str, 
-        conversation_history: List[dict],
+        conversation_history: List[Message],
         current_message: Message
     ) -> Session:
         """
@@ -28,7 +28,7 @@ class StatelessSessionManager:
         
         Args:
             session_id: The session identifier
-            conversation_history: List of previous messages in dict format
+            conversation_history: List of previous Message objects
             current_message: The current incoming message
             
         Returns:
@@ -44,25 +44,15 @@ class StatelessSessionManager:
             status=SessionStatus.ACTIVE
         )
         
-        # Convert conversation history to Message objects
-        messages = []
-        for i, msg_data in enumerate(conversation_history):
-            message = Message(
-                sender=msg_data.get("sender", "unknown"),
-                text=msg_data.get("text", ""),
-                timestamp=self._parse_timestamp(msg_data.get("timestamp")),
-                message_id=msg_data.get("message_id", f"hist_{i}")
-            )
-            messages.append(message)
-        
-        # Add current message
-        messages.append(current_message)
-        
-        # Add all messages to session
-        for message in messages:
+        # Add conversation history messages (already Message objects)
+        for message in conversation_history:
             session.add_message(message)
         
-        logger.info(f"Reconstructed session {session_id} with {len(messages)} messages")
+        # Add current message
+        session.add_message(current_message)
+        
+        total_messages = len(conversation_history) + 1
+        logger.info(f"Reconstructed session {session_id} with {total_messages} messages")
         return session
     
     def _parse_timestamp(self, timestamp_data) -> datetime:
@@ -84,12 +74,12 @@ class StatelessSessionManager:
         """Add scam analysis to session."""
         session.add_analysis(analysis)
     
-    def validate_history_format(self, conversation_history: List[dict]) -> bool:
+    def validate_history_format(self, conversation_history: List[Message]) -> bool:
         """
         Validate that conversation history has the expected format.
         
         Args:
-            conversation_history: List of message dictionaries
+            conversation_history: List of Message objects
             
         Returns:
             True if format is valid
@@ -98,11 +88,11 @@ class StatelessSessionManager:
             return False
         
         for msg in conversation_history:
-            if not isinstance(msg, dict):
+            if not isinstance(msg, Message):
                 return False
             
-            # Check required fields
-            if "text" not in msg:
+            # Check required fields exist (Pydantic should ensure this)
+            if not msg.text:
                 return False
         
         return True

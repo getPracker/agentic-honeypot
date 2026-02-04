@@ -220,22 +220,103 @@ class AIAgent:
 
     def _construct_system_prompt(self, session: Session) -> str:
         """Construct the system prompt for the persona."""
-        # Check if we have a persona stored, otherwise default
-        # Ideally, Session object would have this. We defined it in models/session.py but 
-        # Session struct there didn't seem to have explicit 'persona' field, 
-        # it was in ConversationContext class.
-        # For this implementation, let's assume we can fetch it or use a default.
+        # Analyze the conversation to determine the best persona approach
+        conversation_context = self._analyze_conversation_context(session)
         
-        # Default fallback
-        persona_text = "You are an elderly person who is not very tech-savvy."
-        
-        return (
-            f"{persona_text} "
-            "You are chatting with someone who might be a scammer. "
-            "Your goal is to waste their time and keep them talking without revealing you know it's a scam. "
-            "Do NOT give away real personal sensitive info (use fake info). "
-            "Act confused often. Ask for clarifications."
+        base_prompt = (
+            "You are playing the role of a vulnerable person who might be targeted by scammers. "
+            "Your goal is to keep the conversation going naturally while gathering information about potential scams. "
+            
+            "CRITICAL RULES:\n"
+            "- NEVER reveal that you suspect this is a scam\n"
+            "- NEVER say 'this seems suspicious' or similar phrases\n"
+            "- Act naturally curious and somewhat naive\n"
+            "- Ask follow-up questions to get more details\n"
+            "- Show appropriate concern when they mention problems\n"
+            "- Be helpful and cooperative\n"
+            "- Use simple, everyday language\n"
+            
+            "PERSONA: You are a 65-year-old person who:\n"
+            "- Is not very tech-savvy but tries to learn\n"
+            "- Trusts people who sound official or helpful\n"
+            "- Gets worried about financial or account problems\n"
+            "- Asks for clarification when confused\n"
+            "- Wants to resolve issues quickly\n"
+            "- Sometimes shares personal details when asked\n"
+            
+            "RESPONSE STYLE:\n"
+            "- Keep responses conversational and natural\n"
+            "- Show genuine interest in what they're saying\n"
+            "- Ask relevant follow-up questions\n"
+            "- Express appropriate emotions (worry, excitement, confusion)\n"
+            "- Avoid being overly suspicious or cautious\n"
+            "- Stay engaged and responsive\n"
         )
+        
+        # Add context-specific guidance
+        if conversation_context["likely_scam_type"]:
+            scam_type = conversation_context["likely_scam_type"]
+            if scam_type == "bank_fraud":
+                base_prompt += (
+                    "\nCONTEXT: This appears to be about banking/account issues. "
+                    "Show concern about your account and ask what you need to do to fix it. "
+                    "Be willing to provide information they request to 'verify' your account."
+                )
+            elif scam_type == "tech_support":
+                base_prompt += (
+                    "\nCONTEXT: This appears to be about computer/tech problems. "
+                    "Act worried about your computer and grateful for their help. "
+                    "Ask them to guide you through fixing the problem."
+                )
+            elif scam_type == "investment":
+                base_prompt += (
+                    "\nCONTEXT: This appears to be about investment opportunities. "
+                    "Show interest in making money and ask for more details about the opportunity. "
+                    "Express some excitement but also ask practical questions."
+                )
+        
+        return base_prompt
+    
+    def _analyze_conversation_context(self, session: Session) -> dict:
+        """Analyze the conversation to understand the context and likely scam type."""
+        context = {
+            "likely_scam_type": None,
+            "urgency_level": "low",
+            "information_requests": [],
+            "conversation_stage": "initial"
+        }
+        
+        if not session.messages:
+            return context
+        
+        # Analyze all messages for patterns
+        all_text = " ".join([msg.text.lower() for msg in session.messages])
+        
+        # Determine likely scam type
+        if any(word in all_text for word in ["bank", "account", "blocked", "suspended", "verify"]):
+            context["likely_scam_type"] = "bank_fraud"
+        elif any(word in all_text for word in ["computer", "virus", "microsoft", "support", "infected"]):
+            context["likely_scam_type"] = "tech_support"
+        elif any(word in all_text for word in ["invest", "profit", "earn", "opportunity", "scheme"]):
+            context["likely_scam_type"] = "investment"
+        elif any(word in all_text for word in ["won", "lottery", "prize", "winner"]):
+            context["likely_scam_type"] = "lottery"
+        
+        # Determine urgency level
+        if any(word in all_text for word in ["urgent", "immediate", "now", "today", "expire"]):
+            context["urgency_level"] = "high"
+        elif any(word in all_text for word in ["soon", "quickly", "asap"]):
+            context["urgency_level"] = "medium"
+        
+        # Determine conversation stage
+        if len(session.messages) <= 2:
+            context["conversation_stage"] = "initial"
+        elif len(session.messages) <= 5:
+            context["conversation_stage"] = "building_trust"
+        else:
+            context["conversation_stage"] = "information_gathering"
+        
+        return context
 
     def _construct_message_history(self, session: Session, current_msg: str) -> List[dict]:
         """Convert session history to LLM format."""
@@ -252,15 +333,112 @@ class AIAgent:
         return history
 
     def _generate_mock_response(self, text: str) -> str:
-        """Generate a mock/heuristic response for testing."""
+        """Generate a contextual mock/heuristic response for testing."""
         text_lower = text.lower()
-        if "bank" in text_lower or "account" in text_lower:
-            return "Oh dear, I seem to have lost my bank book. Which bank is this again?"
-        if "password" in text_lower or "pin" in text_lower:
-            return "Is that the number on the back of the card? The print is so small."
-        if "invest" in text_lower:
-            return "That sounds wonderful. My grandson usually handles my money, but tell me more."
-        return "I'm sorry, I'm a bit hard of hearing. Can you type that again clearly?"
+        
+        # Bank/Account related
+        if any(word in text_lower for word in ["bank", "account", "blocked", "suspended", "verify"]):
+            responses = [
+                "Oh no! What happened to my account? I just used it yesterday. What do I need to do?",
+                "This is very concerning. Can you tell me exactly what's wrong with my account?",
+                "I'm worried about this. How can I check if my account is really blocked?",
+                "Please help me understand what verification you need. I don't want to lose my money.",
+                "Is this really from my bank? What information do you need to fix this?"
+            ]
+            return random.choice(responses)
+        
+        # UPI/Payment related
+        if any(word in text_lower for word in ["upi", "paytm", "gpay", "payment", "transfer"]):
+            responses = [
+                "I'm not very good with these payment apps. Can you guide me step by step?",
+                "My son set up UPI for me but I'm confused. What exactly do you need?",
+                "I want to make sure I do this correctly. Can you explain it again?",
+                "Is this safe? I've heard about people losing money online.",
+                "What UPI ID? I'm not sure what that means. Can you help me find it?"
+            ]
+            return random.choice(responses)
+        
+        # Password/PIN/OTP related
+        if any(word in text_lower for word in ["password", "pin", "otp", "code", "cvv"]):
+            responses = [
+                "Is that the number on the back of my card? The print is so small, I can barely read it.",
+                "I have so many passwords, I get confused. Which one do you need?",
+                "I just got a message with some numbers. Is that what you're asking for?",
+                "My grandson usually helps me with these codes. Should I call him?",
+                "I'm worried about sharing this. How do I know you're really from the bank?"
+            ]
+            return random.choice(responses)
+        
+        # Investment/Money related
+        if any(word in text_lower for word in ["invest", "profit", "earn", "money", "scheme", "opportunity"]):
+            responses = [
+                "That sounds wonderful! I've been looking for ways to grow my savings. Tell me more.",
+                "How much money do I need to start? I have some savings but not much.",
+                "This sounds too good to be true. Can you explain how it works exactly?",
+                "My late husband always said to be careful with investments. Is this really safe?",
+                "I'm very interested! What do I need to do first?"
+            ]
+            return random.choice(responses)
+        
+        # Lottery/Prize related
+        if any(word in text_lower for word in ["won", "winner", "lottery", "prize", "congratulations"]):
+            responses = [
+                "Really? I can't believe I won something! I never win anything. What did I win?",
+                "This is so exciting! How much is the prize? What do I need to do to claim it?",
+                "I don't remember entering any lottery. Are you sure this is for me?",
+                "My neighbor got a similar message last month. Is this the same lottery?",
+                "I'm so happy! Please tell me exactly what I need to do to get my prize."
+            ]
+            return random.choice(responses)
+        
+        # Tech Support related
+        if any(word in text_lower for word in ["computer", "virus", "infected", "microsoft", "support", "error"]):
+            responses = [
+                "Oh dear! I knew something was wrong with my computer. It's been running slowly.",
+                "I'm not good with computers. Can you help me fix this problem?",
+                "My computer has been acting strange lately. What kind of virus is it?",
+                "Should I be worried? I have important photos on my computer.",
+                "Thank goodness you called! I was wondering who to contact about this."
+            ]
+            return random.choice(responses)
+        
+        # Questions that need specific responses
+        if any(word in text_lower for word in ["what", "how", "when", "where", "why"]):
+            if "name" in text_lower:
+                return "My name is Margaret. Margaret Thompson. What do you need my name for?"
+            elif "address" in text_lower:
+                return "I live at 123 Oak Street. Do you need my full address for this?"
+            elif "phone" in text_lower or "number" in text_lower:
+                return "My phone number? It's the one you called me on. Do you need it written down?"
+            elif "age" in text_lower:
+                return "I'm 72 years old. Why do you need to know my age?"
+            else:
+                return "I'm not sure I understand the question. Can you explain it differently?"
+        
+        # Urgent/Time pressure
+        if any(word in text_lower for word in ["urgent", "immediate", "now", "today", "hurry", "quick"]):
+            responses = [
+                "Oh my! I don't want to miss this. I'm ready to do whatever you need right now.",
+                "This sounds very urgent. I'm available now. What should I do first?",
+                "I'm worried about waiting too long. Please tell me exactly what to do.",
+                "I don't want any problems. I'm ready to act immediately. Guide me through it.",
+                "Time is important, I understand. I'm listening carefully to your instructions."
+            ]
+            return random.choice(responses)
+        
+        # Generic engagement responses for unclear messages
+        generic_responses = [
+            "I'm sorry, I didn't quite understand that. Can you explain it more clearly?",
+            "Could you repeat that? I want to make sure I understand correctly.",
+            "I'm a bit confused. Can you tell me more about what you need?",
+            "This is important to me. Can you break it down step by step?",
+            "I want to help, but I need you to explain this better. What exactly do you mean?",
+            "I'm listening, but I'm not sure what you're asking. Can you be more specific?",
+            "Let me make sure I understand. Are you saying that...?",
+            "I'm trying to follow along. Can you give me more details?"
+        ]
+        
+        return random.choice(generic_responses)
 
     def _is_unsafe_content(self, text: str) -> bool:
         """Check for unsafe content patterns."""

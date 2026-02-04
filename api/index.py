@@ -347,44 +347,124 @@ class handler(BaseHTTPRequestHandler):
         return datetime.now(timezone.utc)
     
     def generate_fallback_response(self, data):
-        """Generate a simple fallback response when services are not available."""
+        """Generate a contextual fallback response when services are not available."""
         print("🔄 [FALLBACK] Generating fallback response...")
         
         message_data = data.get("message", {})
         message_text = message_data.get("text", "").lower()
         print(f"📝 [FALLBACK] Message text: '{message_text}'")
         
-        # Simple rule-based responses as fallback
-        if "bank" in message_text or "account" in message_text:
+        # More sophisticated fallback responses based on content analysis
+        
+        # Bank/Account related - show concern and ask for help
+        if any(word in message_text for word in ["bank", "account", "blocked", "suspended", "verify", "kyc"]):
             responses = [
-                "Oh no! What happened to my account? What do I need to do?",
-                "I'm really worried about this. How can I verify my account?",
-                "Please help me fix this immediately. What information do you need?"
+                "Oh no! What happened to my account? I just used it yesterday. What do I need to do to fix this?",
+                "This is very concerning. Can you tell me exactly what's wrong with my account?",
+                "I'm really worried about this. How can I verify my account? What information do you need?",
+                "Please help me understand what verification you need. I don't want to lose access to my money.",
+                "Is this really from my bank? I want to resolve this immediately. What should I do first?"
             ]
             category = "bank/account"
-        elif "lottery" in message_text or "won" in message_text:
+        
+        # UPI/Payment related - show confusion but willingness to learn
+        elif any(word in message_text for word in ["upi", "paytm", "gpay", "payment", "transfer", "qr"]):
             responses = [
-                "Really? I can't believe I won! What do I need to do to claim it?",
-                "This is amazing! How much did I win? What's the next step?",
-                "I'm so excited! Please tell me how to collect my prize."
+                "I'm not very good with these payment apps. Can you guide me through this step by step?",
+                "My son set up UPI for me but I'm still confused. What exactly do you need me to do?",
+                "I want to make sure I do this correctly. Can you explain how this works?",
+                "What UPI ID are you talking about? I'm not sure what that means. Can you help me find it?",
+                "Is this safe? I've heard about people having problems with online payments."
+            ]
+            category = "upi/payment"
+        
+        # Password/PIN/OTP related - show confusion about security
+        elif any(word in message_text for word in ["password", "pin", "otp", "code", "cvv"]):
+            responses = [
+                "Is that the number on the back of my card? The print is so small, I can barely read it.",
+                "I have so many passwords, I get confused. Which specific one do you need?",
+                "I just got a message with some numbers. Is that what you're asking for?",
+                "I'm worried about sharing this information. How do I know you're really from the bank?",
+                "My grandson usually helps me with these codes. Should I call him first?"
+            ]
+            category = "security/codes"
+        
+        # Investment/Money opportunities - show interest and ask questions
+        elif any(word in message_text for word in ["invest", "profit", "earn", "money", "scheme", "opportunity", "return"]):
+            responses = [
+                "That sounds wonderful! I've been looking for ways to grow my savings. Can you tell me more?",
+                "How much money do I need to start? I have some savings but I'm not sure how much to invest.",
+                "This sounds very interesting. Can you explain exactly how this works?",
+                "I'm definitely interested! What do I need to do to get started with this opportunity?",
+                "My late husband always said to be careful with investments, but this sounds legitimate. Tell me more."
+            ]
+            category = "investment"
+        
+        # Lottery/Prize related - show excitement and ask for details
+        elif any(word in message_text for word in ["won", "winner", "lottery", "prize", "congratulations", "claim"]):
+            responses = [
+                "Really? I can't believe I won something! I never win anything. What exactly did I win?",
+                "This is so exciting! How much is the prize? What do I need to do to claim it?",
+                "I don't remember entering any lottery. Are you sure this is for me? What's my winning number?",
+                "I'm so happy! Please tell me exactly what I need to do to get my prize.",
+                "This is amazing news! How did you get my number? What lottery is this from?"
             ]
             category = "lottery/prize"
-        elif "urgent" in message_text or "immediate" in message_text:
+        
+        # Tech Support related - show worry and gratitude
+        elif any(word in message_text for word in ["computer", "virus", "infected", "microsoft", "support", "error", "malware"]):
             responses = [
-                "Oh my goodness, I don't want to miss this! What should I do right now?",
-                "I'm available now! Please tell me exactly what I need to do.",
-                "I'm ready to act immediately! What's the first step?"
+                "Oh dear! I knew something was wrong with my computer. It's been running so slowly lately.",
+                "I'm not good with computers at all. Can you please help me fix this problem?",
+                "My computer has been acting very strange. What kind of virus do I have?",
+                "Should I be worried? I have all my important photos and documents on this computer.",
+                "Thank goodness you called! I was wondering who to contact about these computer problems."
+            ]
+            category = "tech_support"
+        
+        # Questions that need specific responses
+        elif any(word in message_text for word in ["what", "how", "when", "where", "why", "can you", "do you"]):
+            if "name" in message_text:
+                responses = ["My name is Margaret Thompson. What do you need my name for exactly?"]
+            elif "address" in message_text:
+                responses = ["I live at 123 Oak Street, Apartment 4B. Do you need my complete address for this?"]
+            elif "phone" in message_text or "number" in message_text:
+                responses = ["My phone number? It's the one you just called me on. Do you need me to repeat it?"]
+            elif "age" in message_text:
+                responses = ["I'm 72 years old. Why do you need to know my age for this?"]
+            else:
+                responses = [
+                    "I'm not sure I understand the question. Can you explain it differently?",
+                    "Could you be more specific? I want to make sure I give you the right information.",
+                    "I'm a bit confused by what you're asking. Can you break it down for me?"
+                ]
+            category = "questions"
+        
+        # Urgent/Time pressure - show willingness to act quickly
+        elif any(word in message_text for word in ["urgent", "immediate", "now", "today", "hurry", "quick", "expire"]):
+            responses = [
+                "Oh my! I don't want to miss this opportunity. I'm ready to do whatever you need right now.",
+                "This sounds very urgent. I'm available right now. What should I do first?",
+                "I'm worried about waiting too long. Please tell me exactly what I need to do.",
+                "I don't want any problems with my account. I'm ready to act immediately. Guide me through it.",
+                "Time is important, I understand. I'm listening carefully to your instructions."
             ]
             category = "urgent"
+        
+        # Generic but engaging responses for unclear messages
         else:
             responses = [
-                "I'm concerned about this. Can you please help me understand what to do?",
-                "This sounds important. What information do you need from me?",
-                "I want to resolve this quickly. Please tell me the next steps."
+                "I'm sorry, I didn't quite understand that. Can you explain it more clearly?",
+                "Could you repeat that? I want to make sure I understand what you need from me.",
+                "I'm a bit confused. Can you tell me more about what this is regarding?",
+                "This sounds important. Can you break it down step by step for me?",
+                "I want to help, but I need you to explain this better. What exactly are you asking?",
+                "I'm trying to follow along. Can you give me more details about what you need?",
+                "Let me make sure I understand correctly. Are you saying that my account has a problem?",
+                "I'm listening carefully. Can you be more specific about what I need to do?"
             ]
-            category = "generic"
+            category = "generic_engagement"
         
-        import random
         selected_response = random.choice(responses)
         
         print(f"🎯 [FALLBACK] Category: {category}")
