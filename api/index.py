@@ -55,8 +55,11 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         
         try:
+            # Normalize the JSON data to handle different quote characters
+            normalized_data = self._normalize_json_quotes(post_data.decode('utf-8'))
+            
             # Parse JSON data
-            data = json.loads(post_data.decode('utf-8')) if post_data else {}
+            data = json.loads(normalized_data) if normalized_data else {}
             
             # Validate required fields
             if not self._validate_request_body(data):
@@ -77,7 +80,9 @@ class handler(BaseHTTPRequestHandler):
                 "reply": result.get("reply", "I didn't understand that.")
             }
             
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            print(f"Raw data: {post_data}")
             response = {
                 "status": "error",
                 "reply": "Invalid JSON data received",
@@ -229,4 +234,65 @@ class handler(BaseHTTPRequestHandler):
             print("Warning: sessionId missing from request")
         
         return True
+    
+    def _normalize_json_quotes(self, json_string):
+        """
+        Normalize different types of quotes in JSON to standard double quotes.
+        
+        Handles:
+        - Curly quotes: " " → " "
+        - Single quotes: ' → "
+        - Other Unicode quotes
+        """
+        if not json_string:
+            return json_string
+        
+        # Dictionary of problematic quotes to replace
+        quote_replacements = {
+            # Curly double quotes
+            '"': '"',  # Left double quotation mark
+            '"': '"',  # Right double quotation mark
+            
+            # Curly single quotes  
+            ''': "'",  # Left single quotation mark
+            ''': "'",  # Right single quotation mark
+            
+            # Other Unicode quotes
+            '‚': "'",  # Single low-9 quotation mark
+            '„': '"',  # Double low-9 quotation mark
+            '‹': "'",  # Single left-pointing angle quotation mark
+            '›': "'",  # Single right-pointing angle quotation mark
+            '«': '"',  # Left-pointing double angle quotation mark
+            '»': '"',  # Right-pointing double angle quotation mark
+        }
+        
+        # Replace all problematic quotes
+        normalized = json_string
+        for bad_quote, good_quote in quote_replacements.items():
+            normalized = normalized.replace(bad_quote, good_quote)
+        
+        # Additional safety: try to fix common single quote JSON issues
+        # This is more aggressive and might need adjustment
+        try:
+            # Test if it's valid JSON now
+            json.loads(normalized)
+            return normalized
+        except json.JSONDecodeError:
+            # Try converting single quotes to double quotes for JSON keys/values
+            # This is a simple heuristic and might not work for all cases
+            try:
+                # Replace single quotes around keys and values with double quotes
+                import re
+                # Pattern to match single-quoted strings (simple version)
+                pattern = r"'([^']*?)'"
+                normalized = re.sub(pattern, r'"\1"', normalized)
+                
+                # Test again
+                json.loads(normalized)
+                return normalized
+            except:
+                # Return original if all normalization attempts fail
+                return json_string
+        
+        return normalized
 
