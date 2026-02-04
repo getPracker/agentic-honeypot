@@ -189,7 +189,7 @@ class handler(BaseHTTPRequestHandler):
             print("📦 [LINE 5] Attempting to import stateless services...")
             # Import the stateless services
             from honeypot.services.stateless_orchestrator import StatelessMessageProcessor
-            from honeypot.models.core import MessageRequest, Message
+            from honeypot.models.core import MessageRequest, Message, RequestMetadata
             from datetime import datetime, timezone
             print("✅ [LINE 10] Successfully imported stateless services")
             
@@ -211,17 +211,61 @@ class handler(BaseHTTPRequestHandler):
             )
             print(f"✅ [LINE 28] Message object created: sender={message.sender}, text='{message.text[:50]}...'")
             
+            # Fix conversation history - convert to proper Message objects
+            print("🔧 [LINE 31] Processing conversation history...")
+            conversation_history = data.get("conversationHistory", [])
+            fixed_history = []
+            
+            for i, hist_msg in enumerate(conversation_history):
+                # Ensure all required fields are present
+                if "message_id" not in hist_msg:
+                    hist_msg["message_id"] = f"hist_{i}_{int(time.time())}"
+                    print(f"   🔧 Added message_id to history item {i}: {hist_msg['message_id']}")
+                
+                # Ensure timestamp is properly formatted
+                if "timestamp" in hist_msg:
+                    parsed_timestamp = self._parse_timestamp(hist_msg["timestamp"])
+                else:
+                    parsed_timestamp = datetime.now(timezone.utc)
+                    print(f"   🔧 Added missing timestamp to history item {i}")
+                
+                # Create proper Message object
+                try:
+                    message_obj = Message(
+                        sender=hist_msg.get("sender", "unknown"),
+                        text=hist_msg.get("text", ""),
+                        timestamp=parsed_timestamp,
+                        message_id=hist_msg["message_id"]
+                    )
+                    fixed_history.append(message_obj)
+                    print(f"   ✅ Created Message object for history item {i}")
+                except Exception as e:
+                    print(f"   ❌ Failed to create Message object for history item {i}: {e}")
+                    # Skip invalid history items
+                    continue
+            print(f"✅ [LINE 44] Fixed conversation history: {len(fixed_history)} messages")
+            
+            print("⚙️ [LINE 46] Setting up async processing...")
+            # Create proper metadata object
+            metadata_dict = data.get("metadata", {})
+            metadata = RequestMetadata(
+                channel=metadata_dict.get("channel", "Unknown"),
+                language=metadata_dict.get("language", "English"),
+                locale=metadata_dict.get("locale", "US")
+            )
+            print(f"✅ [LINE 54] Created RequestMetadata: {metadata.channel}, {metadata.language}, {metadata.locale}")
+            
             # Create the request
             request = MessageRequest(
                 session_id=data.get("sessionId", f"session_{int(time.time())}"),
                 message=message,
-                conversation_history=data.get("conversationHistory", []),
-                metadata=data.get("metadata", {})
+                conversation_history=fixed_history,
+                metadata=metadata
             )
-            print(f"✅ [LINE 37] MessageRequest created: session_id={request.session_id}")
-            print(f"📊 [LINE 38] Conversation history length: {len(request.conversation_history)}")
+            print(f"✅ [LINE 62] MessageRequest created: session_id={request.session_id}")
+            print(f"📊 [LINE 63] Conversation history length: {len(request.conversation_history)}")
             
-            print("⚙️ [LINE 40] Setting up async processing...")
+            print("⚙️ [LINE 65] Setting up async processing...")
             # Process the message using the stateless orchestrator
             import asyncio
             
