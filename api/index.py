@@ -49,20 +49,43 @@ class handler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         
+        # Debug logging
+        print(f"📥 Received POST request:")
+        print(f"   Content-Length: {content_length}")
+        print(f"   Content-Type: {self.headers.get('Content-Type', 'Not set')}")
+        print(f"   Raw data length: {len(post_data)}")
+        print(f"   Raw data (first 200 chars): {post_data[:200]}")
+        
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
         try:
+            # Decode raw data
+            raw_string = post_data.decode('utf-8')
+            print(f"📝 Decoded string: {raw_string[:200]}...")
+            
+            # Check for problematic characters
+            problematic_chars = []
+            for i, char in enumerate(raw_string):
+                if ord(char) > 127:
+                    problematic_chars.append(f"pos {i}: '{char}' (U+{ord(char):04X})")
+            
+            if problematic_chars:
+                print(f"⚠️  Non-ASCII characters found: {problematic_chars[:5]}")
+            
             # Normalize the JSON data to handle different quote characters
-            normalized_data = self._normalize_json_quotes(post_data.decode('utf-8'))
+            normalized_data = self._normalize_json_quotes(raw_string)
+            print(f"🔧 Normalized data: {normalized_data[:200]}...")
             
             # Parse JSON data
             data = json.loads(normalized_data) if normalized_data else {}
+            print(f"✅ JSON parsed successfully: {list(data.keys())}")
             
             # Validate required fields
             if not self._validate_request_body(data):
+                print("❌ Request body validation failed")
                 response = {
                     "status": "error",
                     "reply": "Invalid request body format",
@@ -70,6 +93,8 @@ class handler(BaseHTTPRequestHandler):
                 }
                 self.wfile.write(json.dumps(response).encode('utf-8'))
                 return
+            
+            print("✅ Request body validation passed")
             
             # Process using stateless services
             result = self.process_with_stateless_services(data)
@@ -81,15 +106,25 @@ class handler(BaseHTTPRequestHandler):
             }
             
         except json.JSONDecodeError as e:
-            print(f"JSON decode error: {e}")
-            print(f"Raw data: {post_data}")
+            print(f"❌ JSON decode error: {e}")
+            print(f"   Error position: {e.pos}")
+            print(f"   Context: '{raw_string[max(0, e.pos-20):e.pos+20]}'")
             response = {
                 "status": "error",
                 "reply": "Invalid JSON data received",
                 "error_code": "INVALID_REQUEST_BODY"
             }
+        except UnicodeDecodeError as e:
+            print(f"❌ Unicode decode error: {e}")
+            response = {
+                "status": "error",
+                "reply": "Invalid character encoding",
+                "error_code": "INVALID_REQUEST_BODY"
+            }
         except Exception as e:
-            print(f"Processing error: {e}")
+            print(f"❌ Processing error: {e}")
+            import traceback
+            traceback.print_exc()
             response = {
                 "status": "error", 
                 "reply": f"Processing error: {str(e)}",
