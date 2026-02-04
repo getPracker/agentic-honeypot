@@ -304,8 +304,11 @@ class handler(BaseHTTPRequestHandler):
     
     def generate_fallback_response(self, data):
         """Generate a simple fallback response when services are not available."""
+        print("🔄 [FALLBACK] Generating fallback response...")
+        
         message_data = data.get("message", {})
         message_text = message_data.get("text", "").lower()
+        print(f"📝 [FALLBACK] Message text: '{message_text}'")
         
         # Simple rule-based responses as fallback
         if "bank" in message_text or "account" in message_text:
@@ -314,27 +317,38 @@ class handler(BaseHTTPRequestHandler):
                 "I'm really worried about this. How can I verify my account?",
                 "Please help me fix this immediately. What information do you need?"
             ]
+            category = "bank/account"
         elif "lottery" in message_text or "won" in message_text:
             responses = [
                 "Really? I can't believe I won! What do I need to do to claim it?",
                 "This is amazing! How much did I win? What's the next step?",
                 "I'm so excited! Please tell me how to collect my prize."
             ]
+            category = "lottery/prize"
         elif "urgent" in message_text or "immediate" in message_text:
             responses = [
                 "Oh my goodness, I don't want to miss this! What should I do right now?",
                 "I'm available now! Please tell me exactly what I need to do.",
                 "I'm ready to act immediately! What's the first step?"
             ]
+            category = "urgent"
         else:
             responses = [
                 "I'm concerned about this. Can you please help me understand what to do?",
                 "This sounds important. What information do you need from me?",
                 "I want to resolve this quickly. Please tell me the next steps."
             ]
+            category = "generic"
         
         import random
-        return {"reply": random.choice(responses)}
+        selected_response = random.choice(responses)
+        
+        print(f"🎯 [FALLBACK] Category: {category}")
+        print(f"✅ [FALLBACK] Selected response: '{selected_response}'")
+        
+        result = {"reply": selected_response}
+        print(f"📋 [FALLBACK] Final fallback result: {result}")
+        return result
     
     def _validate_request_body(self, data):
         """Validate the request body has required structure."""

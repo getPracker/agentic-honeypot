@@ -148,16 +148,27 @@ class StatelessMessageProcessor:
         Returns:
             True if agent should respond
         """
+        print(f"🤔 [ORCHESTRATOR] Deciding whether to engage...")
+        print(f"   📊 Current analysis - is_scam: {current_analysis.is_scam}")
+        print(f"   📊 Current analysis - confidence: {current_analysis.confidence}")
+        print(f"   📊 Current analysis - type: {current_analysis.scam_type.value}")
+        
         # Engage if current message is detected as scam
         if current_analysis.is_scam:
+            print(f"   ✅ Will engage: Current message is detected as scam")
             return True
         
         # Engage if any previous message in the session was a scam
         # (continuing an ongoing scam conversation)
+        previous_scams = [analysis.is_scam for analysis in session.scam_analyses]
+        print(f"   📚 Previous scam analyses: {previous_scams}")
+        
         if any(analysis.is_scam for analysis in session.scam_analyses):
+            print(f"   ✅ Will engage: Previous message(s) were scams (continuing conversation)")
             return True
         
         # Don't engage for non-scam messages
+        print(f"   ❌ Will NOT engage: No scam detected in current or previous messages")
         return False
 
     def _merge_intelligence(self, session: Session, new_intel):
