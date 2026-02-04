@@ -58,6 +58,16 @@ class handler(BaseHTTPRequestHandler):
             # Parse JSON data
             data = json.loads(post_data.decode('utf-8')) if post_data else {}
             
+            # Validate required fields
+            if not self._validate_request_body(data):
+                response = {
+                    "status": "error",
+                    "reply": "Invalid request body format",
+                    "error_code": "INVALID_REQUEST_BODY"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                return
+            
             # Process using stateless services
             result = self.process_with_stateless_services(data)
             
@@ -70,13 +80,15 @@ class handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             response = {
                 "status": "error",
-                "reply": "Invalid JSON data received"
+                "reply": "Invalid JSON data received",
+                "error_code": "INVALID_REQUEST_BODY"
             }
         except Exception as e:
             print(f"Processing error: {e}")
             response = {
                 "status": "error", 
-                "reply": f"Processing error: {str(e)}"
+                "reply": f"Processing error: {str(e)}",
+                "error_code": "PROCESSING_ERROR"
             }
         
         self.wfile.write(json.dumps(response).encode('utf-8'))
@@ -194,4 +206,27 @@ class handler(BaseHTTPRequestHandler):
         
         import random
         return {"reply": random.choice(responses)}
+    
+    def _validate_request_body(self, data):
+        """Validate the request body has required structure."""
+        if not isinstance(data, dict):
+            return False
+        
+        # Check for required fields
+        if "message" not in data:
+            return False
+        
+        message = data.get("message", {})
+        if not isinstance(message, dict):
+            return False
+        
+        # Check message has required fields
+        if "text" not in message:
+            return False
+        
+        # Optional but recommended fields
+        if "sessionId" not in data:
+            print("Warning: sessionId missing from request")
+        
+        return True
 

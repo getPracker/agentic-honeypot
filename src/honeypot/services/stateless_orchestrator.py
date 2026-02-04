@@ -104,14 +104,17 @@ class StatelessMessageProcessor:
                 session_id=session_id
             )
             
-            # 7. Trigger Callback (async, don't wait)
-            # Send callback whenever scam is detected, regardless of agent response
-            if response.scam_detected:
+            # 7. Trigger Callback - Send Final Result to GUVI
+            # Only send when scam is detected AND we have an agent response (engagement complete)
+            if response.scam_detected and agent_response_text:
                 try:
-                    self.callback_handler.send_callback(session, response)
-                    logger.info(f"Callback sent for session {session_id}")
+                    success = self.callback_handler.send_callback(session, response)
+                    if success:
+                        logger.info(f"✅ GUVI callback sent successfully for session {session_id}")
+                    else:
+                        logger.warning(f"⚠️ GUVI callback failed for session {session_id}")
                 except Exception as e:
-                    logger.warning(f"Callback failed for session {session_id}: {e}")
+                    logger.error(f"❌ GUVI callback error for session {session_id}: {e}")
             
             return response
             

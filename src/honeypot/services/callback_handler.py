@@ -60,38 +60,117 @@ class CallbackHandler:
 
     def _format_payload(self, session: Session, response: MessageResponse) -> Dict[str, Any]:
         """
-        Format the callback payload according to requirements.
+        Format the callback payload according to GUVI requirements.
         
-        Required fields:
-        - sessionId
-        - scamDetected
-        - totalMessagesExchanged
-        - extractedIntelligence
-        - agentNotes
+        GUVI Required format:
+        {
+            "sessionId": "abc123-session-id",
+            "scamDetected": true,
+            "totalMessagesExchanged": 18,
+            "extractedIntelligence": {
+                "bankAccounts": ["XXXX-XXXX-XXXX"],
+                "upiIds": ["scammer@upi"],
+                "phishingLinks": ["http://malicious-link.example"],
+                "phoneNumbers": ["+91XXXXXXXXXX"],
+                "suspiciousKeywords": ["urgent", "verify now", "account blocked"]
+            },
+            "agentNotes": "Scammer used urgency tactics and payment redirection"
+        }
         """
-        # Convert Pydantic models to dict if needed, or construct manually
-        # extracted_intelligence is already a dict in MessageResponse based on current def, 
-        # or it might be the object which needs dump. 
-        # In MessageResponse model it is defined as dict. 
-        # In Session model it is Optional[ScamIntelligence].
-        # We should prefer the rich object from Session if available and serialize it.
         
-        intelligence = {}
+        # Initialize intelligence with GUVI format
+        intelligence = {
+            "bankAccounts": [],
+            "upiIds": [],
+            "phishingLinks": [],
+            "phoneNumbers": [],
+            "suspiciousKeywords": []
+        }
+        
+        # Extract intelligence from session if available
         if session.extracted_intelligence:
-            # We can use a utility to dump dataclass/pydantic to dict
-            # Since ScamIntelligence is a dataclass (from our current code), we can use asdict or manual
-            from dataclasses import asdict
-            intelligence = asdict(session.extracted_intelligence)
+            intel = session.extracted_intelligence
+            
+            # Convert bank accounts
+            if intel.bank_accounts:
+                intelligence["bankAccounts"] = [
+                    acc.account_number for acc in intel.bank_accounts
+                ]
+            
+            # Convert UPI IDs
+            if intel.upi_ids:
+                intelligence["upiIds"] = intel.upi_ids
+            
+            # Convert URLs to phishing links
+            if intel.urls:
+                intelligence["phishingLinks"] = [
+                    url.url for url in intel.urls
+                ]
+            
+            # Convert phone numbers
+            if intel.phone_numbers:
+                intelligence["phoneNumbers"] = [
+                    phone.number for phone in intel.phone_numbers
+                ]
+            
+            # Convert keywords to suspicious keywords
+            if intel.keywords:
+                intelligence["suspiciousKeywords"] = intel.keywords
+        
+        # Fallback to response intelligence if session doesn't have it
         elif isinstance(response.extracted_intelligence, dict):
-            intelligence = response.extracted_intelligence
+            resp_intel = response.extracted_intelligence
+            
+            # Map from response format to GUVI format
+            intelligence["bankAccounts"] = self._extract_bank_accounts(resp_intel)
+            intelligence["upiIds"] = resp_intel.get("upi_ids", [])
+            intelligence["phishingLinks"] = self._extract_urls(resp_intel)
+            intelligence["phoneNumbers"] = self._extract_phone_numbers(resp_intel)
+            intelligence["suspiciousKeywords"] = resp_intel.get("keywords", [])
 
         return {
             "sessionId": session.session_id,
             "scamDetected": response.scam_detected,
             "totalMessagesExchanged": session.get_message_count(),
             "extractedIntelligence": intelligence,
-            "agentNotes": session.agent_notes or response.agent_notes
+            "agentNotes": session.agent_notes or response.agent_notes or "AI agent engagement completed"
         }
+    
+    def _extract_bank_accounts(self, intelligence_dict: dict) -> List[str]:
+        """Extract bank account numbers from intelligence dict."""
+        bank_accounts = intelligence_dict.get("bank_accounts", [])
+        if isinstance(bank_accounts, list):
+            # Handle both string format and dict format
+            return [
+                acc if isinstance(acc, str) else acc.get("account_number", "")
+                for acc in bank_accounts
+                if acc
+            ]
+        return []
+    
+    def _extract_phone_numbers(self, intelligence_dict: dict) -> List[str]:
+        """Extract phone numbers from intelligence dict."""
+        phone_numbers = intelligence_dict.get("phone_numbers", [])
+        if isinstance(phone_numbers, list):
+            # Handle both string format and dict format
+            return [
+                phone if isinstance(phone, str) else phone.get("number", "")
+                for phone in phone_numbers
+                if phone
+            ]
+        return []
+    
+    def _extract_urls(self, intelligence_dict: dict) -> List[str]:
+        """Extract URLs from intelligence dict."""
+        urls = intelligence_dict.get("urls", [])
+        if isinstance(urls, list):
+            # Handle both string format and dict format
+            return [
+                url if isinstance(url, str) else url.get("url", "")
+                for url in urls
+                if url
+            ]
+        return []
 
     def close(self):
         """Close the HTTP client."""
