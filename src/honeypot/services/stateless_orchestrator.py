@@ -105,11 +105,13 @@ class StatelessMessageProcessor:
             )
             
             # 7. Trigger Callback (async, don't wait)
-            if analysis.is_scam and agent_response_text:
+            # Send callback whenever scam is detected, regardless of agent response
+            if response.scam_detected:
                 try:
                     self.callback_handler.send_callback(session, response)
+                    logger.info(f"Callback sent for session {session_id}")
                 except Exception as e:
-                    logger.warning(f"Callback failed: {e}")
+                    logger.warning(f"Callback failed for session {session_id}: {e}")
             
             return response
             
