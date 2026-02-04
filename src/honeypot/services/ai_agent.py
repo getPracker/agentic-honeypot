@@ -4,8 +4,20 @@ import logging
 import random
 from typing import List, Optional
 
-import openai
-import google.generativeai as genai
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    print("⚠️ OpenAI not available")
+
+try:
+    import google.generativeai as genai
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
+    print("⚠️ Google Generative AI not available")
+
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config.settings import get_settings
@@ -53,15 +65,35 @@ class AIAgent:
 
     def _setup_providers(self):
         """Setup LLM providers based on configuration."""
-        if self._settings.openai_api_key:
-            self.openai_client = openai.Client(api_key=self._settings.openai_api_key)
+        if self._settings.openai_api_key and OPENAI_AVAILABLE:
+            try:
+                self.openai_client = openai.Client(api_key=self._settings.openai_api_key)
+                logger.info("✅ OpenAI client initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize OpenAI client: {e}")
+                self.openai_client = None
+        else:
+            if not OPENAI_AVAILABLE:
+                logger.warning("OpenAI package not available")
+            if not self._settings.openai_api_key:
+                logger.info("No OpenAI API key configured")
             
-        if self._settings.gemini_api_key:
-            genai.configure(api_key=self._settings.gemini_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+        if self._settings.gemini_api_key and GOOGLE_AVAILABLE:
+            try:
+                genai.configure(api_key=self._settings.gemini_api_key)
+                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                logger.info("✅ Gemini client initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Gemini client: {e}")
+                self.gemini_model = None
+        else:
+            if not GOOGLE_AVAILABLE:
+                logger.warning("Google Generative AI package not available")
+            if not self._settings.gemini_api_key:
+                logger.info("No Gemini API key configured")
         
         if not self.openai_client and not self.gemini_model:
-            logger.warning("No LLM API keys configured. agent will run in detailed mock mode.")
+            logger.warning("No LLM API keys configured or packages available. Agent will run in mock mode.")
 
     def select_persona(self, analysis: ScamAnalysis) -> PersonaState:
         """
@@ -125,6 +157,14 @@ class AIAgent:
 
     def _generate_openai_response(self, prompt: str, session: Session, current_message: str) -> Optional[str]:
         """Generate response using OpenAI."""
+        if not OPENAI_AVAILABLE:
+            logger.warning("OpenAI package not available")
+            return None
+            
+        if not self.openai_client:
+            logger.warning("OpenAI client not initialized")
+            return None
+            
         messages = self._construct_message_history(session, current_message)
         try:
             response = self.openai_client.chat.completions.create(
@@ -143,6 +183,14 @@ class AIAgent:
 
     def _generate_gemini_response(self, prompt: str, session: Session, current_message: str) -> Optional[str]:
         """Generate response using Gemini."""
+        if not GOOGLE_AVAILABLE:
+            logger.warning("Google Generative AI package not available")
+            return None
+            
+        if not self.gemini_model:
+            logger.warning("Gemini model not initialized")
+            return None
+            
         try:
             # Gemini has different chat structure. 
             # We can use chat.start_chat(history=...)
