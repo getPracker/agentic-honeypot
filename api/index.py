@@ -134,14 +134,22 @@ class handler(BaseHTTPRequestHandler):
             
             print("✅ Request body validation passed")
             
+            print("🎯 [MAIN] Calling process_with_stateless_services...")
             # Process using stateless services
             result = self.process_with_stateless_services(data)
+            print(f"✅ [MAIN] process_with_stateless_services returned: {type(result)}")
+            print(f"📋 [MAIN] Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
             
+            print("🔧 [MAIN] Building external API response...")
             # Return in the expected simple format for external API
             response = {
                 "status": "success",
                 "reply": result.get("reply", "I didn't understand that.")
             }
+            print(f"✅ [MAIN] Final response: {response}")
+            print("🎉 [MAIN] POST request processing completed successfully")
+
+            print(response)
             
         except json.JSONDecodeError as e:
             print(f"❌ JSON decode error: {e}")
@@ -174,23 +182,34 @@ class handler(BaseHTTPRequestHandler):
     
     def process_with_stateless_services(self, data):
         """Process using the stateless honeypot services."""
+        print("🚀 [LINE 1] Starting process_with_stateless_services")
+        print(f"📥 [LINE 2] Input data keys: {list(data.keys())}")
+        
         try:
+            print("📦 [LINE 5] Attempting to import stateless services...")
             # Import the stateless services
             from honeypot.services.stateless_orchestrator import StatelessMessageProcessor
             from honeypot.models.core import MessageRequest, Message
             from datetime import datetime, timezone
+            print("✅ [LINE 10] Successfully imported stateless services")
             
+            print("🏗️ [LINE 12] Creating StatelessMessageProcessor...")
             # Create the stateless processor
             processor = StatelessMessageProcessor()
+            print("✅ [LINE 15] StatelessMessageProcessor created successfully")
             
+            print("🔄 [LINE 17] Converting incoming data to internal format...")
             # Convert the incoming data to our internal format
             message_data = data.get("message", {})
+            print(f"📝 [LINE 20] Message data: {message_data}")
+            
             message = Message(
                 sender=message_data.get("sender", "scammer"),
                 text=message_data.get("text", ""),
                 timestamp=self._parse_timestamp(message_data.get("timestamp")),
                 message_id=message_data.get("message_id", f"msg_{int(time.time())}")
             )
+            print(f"✅ [LINE 28] Message object created: sender={message.sender}, text='{message.text[:50]}...'")
             
             # Create the request
             request = MessageRequest(
@@ -199,21 +218,35 @@ class handler(BaseHTTPRequestHandler):
                 conversation_history=data.get("conversationHistory", []),
                 metadata=data.get("metadata", {})
             )
+            print(f"✅ [LINE 37] MessageRequest created: session_id={request.session_id}")
+            print(f"📊 [LINE 38] Conversation history length: {len(request.conversation_history)}")
             
+            print("⚙️ [LINE 40] Setting up async processing...")
             # Process the message using the stateless orchestrator
             import asyncio
             
             # Handle async processing
             try:
                 loop = asyncio.get_event_loop()
+                print("🔄 [LINE 47] Using existing event loop")
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+                print("🆕 [LINE 51] Created new event loop")
             
+            print("🎯 [LINE 53] Calling processor.process_message()...")
             response = loop.run_until_complete(processor.process_message(request))
+            print("✅ [LINE 55] processor.process_message() completed successfully")
             
+            print(f"📋 [LINE 57] Response object attributes:")
+            print(f"   - status: {response.status}")
+            print(f"   - scam_detected: {response.scam_detected}")
+            print(f"   - agent_response: {response.agent_response[:100] if response.agent_response else 'None'}...")
+            print(f"   - session_id: {response.session_id}")
+            
+            print("🔧 [LINE 64] Building comprehensive result...")
             # Return comprehensive result
-            return {
+            result = {
                 "reply": response.agent_response or "I'm sorry, I didn't understand that.",
                 "scam_detected": response.scam_detected,
                 "intelligence": response.extracted_intelligence,
@@ -226,15 +259,33 @@ class handler(BaseHTTPRequestHandler):
                 "session_id": response.session_id,
                 "notes": response.agent_notes
             }
+            
+            print(f"✅ [LINE 78] Final result created:")
+            print(f"   - reply: '{result['reply'][:100]}...'")
+            print(f"   - scam_detected: {result['scam_detected']}")
+            print(f"   - intelligence keys: {list(result['intelligence'].keys()) if result['intelligence'] else 'None'}")
+            print(f"   - metrics: {result['metrics']}")
+            
+            print("🎉 [LINE 84] process_with_stateless_services completed successfully")
+            return result
                 
         except ImportError as e:
-            print(f"Import error: {e}")
+            print(f"❌ [LINE 88] Import error: {e}")
+            print("🔄 [LINE 89] Falling back to simple response")
             # Fallback to simple response
-            return self.generate_fallback_response(data)
+            fallback_result = self.generate_fallback_response(data)
+            print(f"✅ [LINE 92] Fallback result: {fallback_result}")
+            return fallback_result
         except Exception as e:
-            print(f"Processing error: {e}")
+            print(f"❌ [LINE 95] Processing error: {e}")
+            print("📍 [LINE 96] Exception details:")
+            import traceback
+            traceback.print_exc()
+            print("🔄 [LINE 99] Falling back to simple response")
             # Fallback to simple response
-            return self.generate_fallback_response(data)
+            fallback_result = self.generate_fallback_response(data)
+            print(f"✅ [LINE 102] Fallback result: {fallback_result}")
+            return fallback_result
     
     def _parse_timestamp(self, timestamp_data):
         """Parse timestamp from various formats."""
