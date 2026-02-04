@@ -274,60 +274,88 @@ class handler(BaseHTTPRequestHandler):
         """
         Normalize different types of quotes in JSON to standard double quotes.
         
-        Handles:
-        - Curly quotes: " " → " "
-        - Single quotes: ' → "
-        - Other Unicode quotes
+        Handles quotes by ASCII/Unicode code points that look similar but aren't standard.
         """
         if not json_string:
             return json_string
         
-        # Dictionary of problematic quotes to replace
-        quote_replacements = {
-            # Curly double quotes
-            '"': '"',  # Left double quotation mark
-            '"': '"',  # Right double quotation mark
-            
-            # Curly single quotes  
-            ''': "'",  # Left single quotation mark
-            ''': "'",  # Right single quotation mark
-            
-            # Other Unicode quotes
-            '‚': "'",  # Single low-9 quotation mark
-            '„': '"',  # Double low-9 quotation mark
-            '‹': "'",  # Single left-pointing angle quotation mark
-            '›': "'",  # Single right-pointing angle quotation mark
-            '«': '"',  # Left-pointing double angle quotation mark
-            '»': '"',  # Right-pointing double angle quotation mark
-        }
+        # Convert to list for character-by-character processing
+        chars = list(json_string)
         
-        # Replace all problematic quotes
-        normalized = json_string
-        for bad_quote, good_quote in quote_replacements.items():
-            normalized = normalized.replace(bad_quote, good_quote)
-        
-        # Additional safety: try to fix common single quote JSON issues
-        # This is more aggressive and might need adjustment
-        try:
-            # Test if it's valid JSON now
-            json.loads(normalized)
-            return normalized
-        except json.JSONDecodeError:
-            # Try converting single quotes to double quotes for JSON keys/values
-            # This is a simple heuristic and might not work for all cases
-            try:
-                # Replace single quotes around keys and values with double quotes
-                import re
-                # Pattern to match single-quoted strings (simple version)
-                pattern = r"'([^']*?)'"
-                normalized = re.sub(pattern, r'"\1"', normalized)
+        for i, char in enumerate(chars):
+            char_code = ord(char)
+            
+            # Replace any quote-like character with standard double quote (ASCII 34)
+            if char_code in [
+                # Standard quotes
+                34,   # " (standard double quote)
+                39,   # ' (standard single quote)
                 
-                # Test again
-                json.loads(normalized)
-                return normalized
-            except:
-                # Return original if all normalization attempts fail
-                return json_string
+                # Unicode quote variants that look like normal quotes
+                8220, # " (left double quotation mark)
+                8221, # " (right double quotation mark)
+                8216, # ' (left single quotation mark) 
+                8217, # ' (right single quotation mark)
+                
+                # Other quote-like characters
+                96,   # ` (grave accent)
+                180,  # ´ (acute accent)
+                8242, # ′ (prime)
+                8243, # ″ (double prime)
+                
+                # Fullwidth quotes (from some input methods)
+                65282, # ＂ (fullwidth quotation mark)
+                
+                # Additional Unicode quotes
+                8218, # ‚ (single low-9 quotation mark)
+                8222, # „ (double low-9 quotation mark)
+                8249, # ‹ (single left-pointing angle quotation mark)
+                8250, # › (single right-pointing angle quotation mark)
+                171,  # « (left-pointing double angle quotation mark)
+                187,  # » (right-pointing double angle quotation mark)
+            ]:
+                # Replace with standard double quote for JSON
+                chars[i] = '"'
+                print(f"🔧 Replaced quote-like char at pos {i}: U+{char_code:04X} → U+0022")
         
-        return normalized
+        normalized = ''.join(chars)
+        
+        # Test if the normalization worked
+        try:
+            json.loads(normalized)
+            print("✅ JSON normalization successful")
+            return normalized
+        except json.JSONDecodeError as e:
+            print(f"⚠️ JSON still invalid after normalization: {e}")
+            
+            # Try more aggressive fixes
+            try:
+                # Fix common JSON issues
+                fixed = self._fix_common_json_issues(normalized)
+                json.loads(fixed)
+                print("✅ JSON fixed with aggressive normalization")
+                return fixed
+            except:
+                print("❌ Could not fix JSON, returning original")
+                return json_string
+    
+    def _fix_common_json_issues(self, json_string):
+        """Apply more aggressive JSON fixes."""
+        import re
+        
+        fixed = json_string
+        
+        # Fix unescaped quotes in string values
+        # This is a simple heuristic - might need refinement
+        
+        # Fix trailing commas
+        fixed = re.sub(r',(\s*[}\]])', r'\1', fixed)
+        
+        # Fix single quotes around property names (if any remain)
+        fixed = re.sub(r"'([^']*?)'(\s*:)", r'"\1"\2', fixed)
+        
+        # Fix unquoted property names
+        fixed = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', fixed)
+        
+        return fixed
 
