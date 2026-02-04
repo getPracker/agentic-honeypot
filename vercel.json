@@ -2,24 +2,24 @@
     "version": 2,
     "routes": [
         {
-            "src": "/hello",
-            "dest": "api/hello.py"
+            "src": "/health",
+            "dest": "api/index.py"
         },
         {
             "src": "/ping",
             "dest": "api/ping.py"
         },
         {
-            "src": "/health",
-            "dest": "api/index.py"
+            "src": "/hello",
+            "dest": "api/hello.py"
         },
         {
             "src": "/api/v1/process-message",
-            "dest": "api/process.py"
+            "dest": "api/index.py"
         },
         {
             "src": "/process",
-            "dest": "api/process.py"
+            "dest": "api/index.py"
         },
         {
             "src": "/(.*)",
