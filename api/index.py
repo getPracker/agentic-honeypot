@@ -49,12 +49,48 @@ class handler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         
+        # Get headers
+        content_type = self.headers.get('Content-Type', '')
+        api_key = self.headers.get('x-api-key', '')
+        
         # Debug logging
         print(f"📥 Received POST request:")
         print(f"   Content-Length: {content_length}")
-        print(f"   Content-Type: {self.headers.get('Content-Type', 'Not set')}")
+        print(f"   Content-Type: {content_type}")
+        print(f"   x-api-key: {'***' + api_key[-4:] if len(api_key) > 4 else 'Not provided'}")
         print(f"   Raw data length: {len(post_data)}")
         print(f"   Raw data (first 200 chars): {post_data[:200]}")
+        
+        # Validate Content-Type
+        if content_type and not content_type.startswith('application/json'):
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = {
+                "status": "error",
+                "reply": "Content-Type must be application/json",
+                "error_code": "INVALID_CONTENT_TYPE"
+            }
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            return
+        
+        # Validate API key (if provided in environment)
+        expected_api_keys = self._get_expected_api_keys()
+        if expected_api_keys and api_key not in expected_api_keys:
+            self.send_response(401)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            response = {
+                "status": "error",
+                "reply": "Invalid or missing API key",
+                "error_code": "INVALID_API_KEY"
+            }
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            return
         
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
@@ -270,6 +306,30 @@ class handler(BaseHTTPRequestHandler):
         
         return True
     
+    def _get_expected_api_keys(self):
+        """Get expected API keys from environment."""
+        import os
+        import json
+        
+        # Get API keys from environment
+        api_keys_env = os.getenv('API_KEYS', '')
+        
+        if not api_keys_env:
+            # No API keys configured - allow all requests (for testing)
+            return None
+        
+        try:
+            # Parse JSON array of API keys
+            api_keys = json.loads(api_keys_env)
+            if isinstance(api_keys, list):
+                return api_keys
+            else:
+                print(f"⚠️ API_KEYS should be a JSON array, got: {type(api_keys)}")
+                return None
+        except json.JSONDecodeError:
+            print(f"⚠️ Invalid API_KEYS format: {api_keys_env}")
+            return None
+    
     def _normalize_json_quotes(self, json_string):
         """
         Normalize different types of quotes in JSON to standard double quotes.
@@ -359,3 +419,13 @@ class handler(BaseHTTPRequestHandler):
         
         return fixed
 
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests."""
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, x-api-key')
+        self.send_header('Access-Control-Max-Age', '86400')  # 24 hours
+        self.end_headers()
+        return
