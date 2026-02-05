@@ -1,16 +1,26 @@
+# Core FastAPI and server dependencies
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
-cryptography>=41.0.7
+
+# AI and LLM providers
 openai>=1.3.7
 google-generativeai>=0.3.1
+
+# HTTP and networking
 httpx>=0.25.2
+requests>=2.31.0
+
+# Utilities and reliability
 tenacity>=8.2.3
 structlog>=24.1.0
-pytest>=7.4.3
+cryptography>=41.0.7
+
+# Async support (required for services)
 pytest-asyncio>=0.21.1
+
+# Testing (optional for production, but good to have)
+pytest>=7.4.3
 hypothesis>=6.92.1
-requests>=2.31.0
-# Cache buster: 1

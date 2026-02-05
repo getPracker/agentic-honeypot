@@ -1,19 +1,25 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "api/index.py",
-            "use": "@vercel/python"
-        },
-        {
-            "src": "api/ping.py",
-            "use": "@vercel/python"
-        }
-    ],
     "routes": [
+        {
+            "src": "/health",
+            "dest": "api/index.py"
+        },
         {
             "src": "/ping",
             "dest": "api/ping.py"
+        },
+        {
+            "src": "/hello",
+            "dest": "api/hello.py"
+        },
+        {
+            "src": "/api/v1/process-message",
+            "dest": "api/index.py"
+        },
+        {
+            "src": "/process",
+            "dest": "api/index.py"
         },
         {
             "src": "/(.*)",
