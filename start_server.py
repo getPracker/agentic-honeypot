@@ -39,16 +39,22 @@ def setup_environment():
 def check_dependencies():
     """Check if all required dependencies are installed."""
     required_packages = [
-        'fastapi', 'uvicorn', 'pydantic', 'python-dotenv',
-        'google-generativeai', 'openai', 'anthropic', 'requests'
+        ('fastapi', 'fastapi'),
+        ('uvicorn', 'uvicorn'), 
+        ('pydantic', 'pydantic'),
+        ('python-dotenv', 'dotenv'),
+        ('google-generativeai', 'google.generativeai'),
+        ('openai', 'openai'),
+        ('anthropic', 'anthropic'),
+        ('requests', 'requests')
     ]
     
     missing = []
-    for package in required_packages:
+    for package_name, import_name in required_packages:
         try:
-            __import__(package.replace('-', '_'))
+            __import__(import_name)
         except ImportError:
-            missing.append(package)
+            missing.append(package_name)
     
     if missing:
         print(f"❌ Missing packages: {missing}")

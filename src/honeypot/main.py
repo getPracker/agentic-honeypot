@@ -1,7 +1,7 @@
 """Main application entry point."""
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -168,12 +168,18 @@ def create_app() -> FastAPI:
         return {"status": "healthy", "service": "agentic-honeypot"}
     
     # Add message processing endpoint
-    @app.post("/api/v1/process-message", response_model=MessageResponse)
-    async def process_message(request: MessageRequest) -> MessageResponse:
+    @app.post("/api/v1/process-message")
+    async def process_message(
+        request: MessageRequest, 
+        format: str = Query("full", description="Response format: 'full' or 'simple'")
+    ):
         """
         Process incoming message for scam detection and intelligence extraction.
         
         This endpoint analyzes messages, detects scams, and generates appropriate responses.
+        
+        Query Parameters:
+        - format: 'full' (default) returns detailed response, 'simple' returns minimal response
         """
         logger.info(f"Processing message for session: {request.session_id}")
         
@@ -203,7 +209,17 @@ def create_app() -> FastAPI:
         
         try:
             response = await app.state.processor.process_message(request)
+            
+            # Return simplified format if requested
+            if format.lower() == "simple":
+                return {
+                    "status": "success",
+                    "reply": response.agent_response if response.agent_response else None
+                }
+            
+            # Return full format (default)
             return response
+            
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}", exc_info=True)
             raise HTTPException(

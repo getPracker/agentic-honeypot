@@ -21,10 +21,12 @@ class ScamDetector:
         # Weights are summed up to calculate confidence.
         self._rules = {
             ScamType.BANK_FRAUD: [
-                (r"\b(account.*number|ac no)\b", 0.3),
+                (r"\b(account.*number|ac no|account.*no)\b", 0.3),
                 (r"\b(password|pin|otp|cvv)\b", 0.4),
-                (r"\b(verify.*account|kyc|adhaar|pan card|unblock)\b", 0.3),
-                (r"\b(blocked|suspended|deactivated)\b", 0.2),
+                (r"\b(verify.*account|kyc|adhaar|pan card|unblock|verify.*immediately)\b", 0.4),
+                (r"\b(blocked|suspended|deactivated|will.*be.*blocked|account.*blocked)\b", 0.4),
+                (r"\b(bank.*account|your.*account)\b", 0.3),
+                (r"\b(today|24.*hours|immediately|urgent)\b", 0.2),
             ],
             ScamType.UPI_FRAUD: [
                 (r"\b(paytm|gpay|phonepe|upi)\b", 0.2),
@@ -63,9 +65,11 @@ class ScamDetector:
         
         # Universal risk indicators (adds small confidence to any match)
         self._risk_patterns = [
-            (r"\b(urgent|hurry|immediate.*)\b", "Urgency"),
+            (r"\b(urgent|hurry|immediate.*|immediately)\b", "Urgency"),
             (r"\b(kindly|dear|beloved)\b", "Suspicious Salutation"),
             (r"\b(verify|update|provide|submit)\b", "Action Request"),
+            (r"\b(blocked|suspended|deactivated)\b", "Account Threat"),
+            (r"\b(today|24.*hours|expire)\b", "Time Pressure"),
         ]
 
     def analyze(self, message_text: str) -> ScamAnalysis:
@@ -126,16 +130,16 @@ class ScamDetector:
         print(f"   🏆 Best scam type: {best_scam_type.value}")
         
         # 3. Determine Final Verdict
-        # Threshold for considering it a scam
-        is_scam = max_score >= 0.5 
-        print(f"   ⚖️ Initial scam verdict (score >= 0.5): {is_scam}")
+        # Lower threshold for considering it a scam (was 0.5, now 0.3)
+        is_scam = max_score >= 0.3 
+        print(f"   ⚖️ Initial scam verdict (score >= 0.3): {is_scam}")
         
         # If score is low but we have generic risk signs, maybe boost slightly?
         if not is_scam and detected_risks:
             print(f"   🔄 Boosting score due to risk indicators...")
-            max_score += 0.1
+            max_score += 0.2  # Increased boost from 0.1 to 0.2
             print(f"   📈 Boosted score: {max_score}")
-            if max_score >= 0.4:
+            if max_score >= 0.3:  # Lower threshold
                 is_scam = True
                 if best_scam_type == ScamType.UNKNOWN:
                     best_scam_type = ScamType.PHISHING # Default fallback for generic risks often
